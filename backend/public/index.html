@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <title>RISTOWORD – Ordini</title>
+  <style>
+    body { font-family: sans-serif; margin: 20px; }
+    h1 { margin-bottom: 10px; }
+    label { display: block; margin-top: 10px; }
+    input, select { padding: 4px; margin-top: 4px; }
+    button { margin-top: 10px; padding: 6px 12px; cursor: pointer; }
+    .filters { margin-top: 15px; margin-bottom: 10px; }
+    .order { border: 1px solid #ccc; padding: 8px; margin-top: 8px; }
+    .order-header { font-weight: bold; }
+    .status-in_preparazione { background: #fff7cc; }
+    .status-pronto { background: #d4f8d4; }
+    .status-servito { background: #f0f0f0; }
+    small { color: #555; }
+  </style>
+</head>
+<body>
+  <h1>RISTOWORD – Ordini tavoli</h1>
+
+  <div>
+    <label>
+      Tavolo:
+      <input type="number" id="table" />
+    </label>
+
+    <label>
+      Coperti:
+      <input type="number" id="covers" />
+    </label>
+
+    <label>
+      Reparto:
+      <select id="area">
+        <option value="sala">Sala</option>
+        <option value="pizzeria">Pizzeria</option>
+        <option value="bar">Bar</option>
+      </select>
+    </label>
+
+    <label>
+      Cameriere:
+      <input type="text" id="waiter" />
+    </label>
+
+    <button onclick="createOrder()">Crea ordine</button>
+  </div>
+
+  <div class="filters">
+    <label>
+      Vista:
+      <select id="viewFilter" onchange="loadOrders()">
+        <option value="tutti">Tutti i reparti</option>
+        <option value="sala">Solo Sala</option>
+        <option value="pizzeria">Solo Pizzeria</option>
+        <option value="bar">Solo Bar</option>
+      </select>
+    </label>
+    <button onclick="loadOrders()">Aggiorna lista ordini</button>
+  </div>
+
+  <h2>Ordini</h2>
+  <div id="orders"></div>
+
+  <script>
+    async function createOrder() {
+      const table = parseInt(document.getElementById('table').value, 10);
+      const covers = parseInt(document.getElementById('covers').value, 10);
+      const area = document.getElementById('area').value;
+      const waiter = document.getElementById('waiter').value;
+
+      if (!table || !covers || !waiter) {
+        alert("Compila tavolo, coperti e cameriere");
+        return;
+      }
+
+      const res = await fetch('/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ table, covers, area, waiter })
+      });
+
+      if (!res.ok) {
+        alert("Errore creazione ordine");
+        return;
+      }
+
+      document.getElementById('table').value = '';
+      document.getElementById('covers').value = '';
+      document.getElementById('waiter').value = '';
+
+      await loadOrders();
+    }
+
+    async function loadOrders() {
+      const res = await fetch('/orders');
+      const orders = await res.json();
+
+      const filter = document.getElementById('viewFilter').value;
+      const container = document.getElementById('orders');
+      container.innerHTML = '';
+
+      let filtered = orders;
+      if (filter !== 'tutti') {
+        filtered = orders.filter(o => o.area === filter);
+      }
+
+      if (!filtered.length) {
+        container.innerHTML = '<em>Nessun ordine</em>';
+        return;
+      }
+
+      filtered.forEach(order => {
+        const div = document.createElement('div');
+        div.className = 'order status-' + order.status;
+
+        const createdAt = order.createdAt ? new Date(order.createdAt) : null;
+        const timeStr = createdAt ? createdAt.toLocaleTimeString() : '';
+
+        div.innerHTML = `
+          <div class="order-header">
+            Ordine #${order.id} – Tavolo ${order.table} (${order.covers} coperti)
+            – ${order.area} – Cameriere: ${order.waiter}
+          </div>
+          <div>Stato: ${order.status}</div>
+          <small>${timeStr ? 'Creato alle ' + timeStr : ''}</small><br/>
+          <button onclick="updateStatus(${order.id}, 'in_preparazione')">IN PREPARAZIONE</button>
+          <button onclick="updateStatus(${order.id}, 'pronto')">PRONTO</button>
+          <button onclick="updateStatus(${order.id}, 'servito')">SERVITO</button>
+        `;
+        container.appendChild(div);
+      });
+    }
+
+    async function updateStatus(id, status) {
+      const res = await fetch(`/orders/${id}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status })
+      });
+
+      if (!res.ok) {
+        alert("Errore aggiornamento stato");
+        return;
+      }
+
+      await loadOrders();
+    }
+
+    // Carica subito la lista alla partenza
+    loadOrders();
+  </script>
+</body>
+</html>

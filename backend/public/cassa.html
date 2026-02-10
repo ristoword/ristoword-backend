@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <title>RISTOWORD – Cassa</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      margin: 20px;
+    }
+    h1 { margin-bottom: 10px; }
+    .section-title { margin-top: 20px; font-weight: bold; }
+    .order {
+      border: 1px solid #ccc;
+      padding: 8px;
+      margin-top: 8px;
+      border-radius: 4px;
+    }
+    .paid { background: #e0ffe0; }
+    .unpaid { background: #ffe0e0; }
+    button { margin-top: 5px; padding: 4px 8px; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <h1>RISTOWORD – Cassa</h1>
+
+  <div>
+    <span class="section-title">Ordini da incassare</span>
+    <div id="unpaidOrders"></div>
+  </div>
+
+  <div>
+    <span class="section-title">Ordini già incassati</span>
+    <div id="paidOrders"></div>
+  </div>
+
+  <script>
+    async function loadCashdesk() {
+      const res = await fetch("/orders");
+      const orders = await res.json();
+
+      const unpaidContainer = document.getElementById("unpaidOrders");
+      const paidContainer = document.getElementById("paidOrders");
+
+      unpaidContainer.innerHTML = "";
+      paidContainer.innerHTML = "";
+
+      const unpaid = orders.filter(o => !o.paid);
+      const paid = orders.filter(o => o.paid);
+
+      if (!unpaid.length) {
+        unpaidContainer.innerHTML = "<em>Nessun ordine aperto</em>";
+      } else {
+        unpaid.forEach(order => {
+          const div = document.createElement("div");
+          div.className = "order unpaid";
+          div.innerHTML = `
+            <div><b>Tavolo ${order.table}</b> – ${order.area ? order.area.toUpperCase() : ""}</div>
+            <div>Coperti: ${order.covers}</div>
+            <div>Cameriere: ${order.waiter}</div>
+            <div>Stato: ${order.status}</div>
+            <button onclick="setPaid(${order.id}, true)">Segna PAGATO</button>
+          `;
+          unpaidContainer.appendChild(div);
+        });
+      }
+
+      if (!paid.length) {
+        paidContainer.innerHTML = "<em>Nessun ordine incassato</em>";
+      } else {
+        paid.forEach(order => {
+          const div = document.createElement("div");
+          div.className = "order paid";
+          div.innerHTML = `
+            <div><b>Tavolo ${order.table}</b> – ${order.area ? order.area.toUpperCase() : ""}</div>
+            <div>Coperti: ${order.covers}</div>
+            <div>Cameriere: ${order.waiter}</div>
+            <div>Stato: ${order.status}</div>
+            <button onclick="setPaid(${order.id}, false)">Segna DA INCASSARE</button>
+          `;
+          paidContainer.appendChild(div);
+        });
+      }
+    }
+
+    async function setPaid(id, paid) {
+      const res = await fetch(`/orders/${id}/paid`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ paid })
+      });
+
+      if (!res.ok) {
+        alert("Errore aggiornamento stato pagamento");
+        return;
+      }
+
+      await loadCashdesk();
+    }
+
+    loadCashdesk();
+    setInterval(loadCashdesk, 7000);
+  </script>
+</body>
+</html>

@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <title>RISTOWORD – Magazzino</title>
+  <style>
+    body { font-family: sans-serif; margin: 20px; }
+    h1 { margin-bottom: 10px; }
+    label { display: block; margin-top: 8px; }
+    input { padding: 4px; margin-top: 4px; }
+    button { margin-top: 10px; padding: 6px 10px; cursor: pointer; }
+    table { border-collapse: collapse; margin-top: 20px; width: 100%; max-width: 800px; }
+    th, td { border: 1px solid #ccc; padding: 6px; text-align: left; }
+    th { background: #f0f0f0; }
+    .qty-buttons button { margin-right: 4px; padding: 2px 6px; }
+  </style>
+</head>
+<body>
+  <h1>RISTOWORD – Magazzino</h1>
+
+  <div>
+    <h2>Aggiungi prodotto</h2>
+    <label>
+      Nome prodotto:
+      <input type="text" id="name" />
+    </label>
+    <label>
+      Unità (es. kg, L, pz):
+      <input type="text" id="unit" />
+    </label>
+    <label>
+      Quantità iniziale:
+      <input type="number" id="quantity" value="0" />
+    </label>
+    <button onclick="addItem()">Aggiungi</button>
+  </div>
+
+  <div>
+    <h2>Prodotti in magazzino</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Nome</th>
+          <th>Unità</th>
+          <th>Quantità</th>
+          <th>Azioni</th>
+        </tr>
+      </thead>
+      <tbody id="inventoryBody"></tbody>
+    </table>
+  </div>
+
+  <script>
+    async function loadInventory() {
+      const res = await fetch("/inventory");
+      const items = await res.json();
+
+      const tbody = document.getElementById("inventoryBody");
+      tbody.innerHTML = "";
+
+      if (!items.length) {
+        const tr = document.createElement("tr");
+        const td = document.createElement("td");
+        td.colSpan = 5;
+        td.innerHTML = "<em>Nessun prodotto in magazzino</em>";
+        tr.appendChild(td);
+        tbody.appendChild(tr);
+        return;
+      }
+
+      items.forEach(item => {
+        const tr = document.createElement("tr");
+
+        tr.innerHTML = `
+          <td>${item.id}</td>
+          <td>${item.name}</td>
+          <td>${item.unit}</td>
+          <td>${item.quantity}</td>
+          <td class="qty-buttons">
+            <button onclick="adjustQty(${item.id}, 1)">+1</button>
+            <button onclick="adjustQty(${item.id}, -1)">-1</button>
+            <button onclick="adjustQty(${item.id}, 10)">+10</button>
+            <button onclick="adjustQty(${item.id}, -10)">-10</button>
+          </td>
+        `;
+
+        tbody.appendChild(tr);
+      });
+    }
+
+    async function addItem() {
+      const name = document.getElementById("name").value.trim();
+      const unit = document.getElementById("unit").value.trim();
+      const quantity = parseFloat(document.getElementById("quantity").value) || 0;
+
+      if (!name || !unit) {
+        alert("Nome e unità sono obbligatori");
+        return;
+      }
+
+      const res = await fetch("/inventory", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, unit, quantity })
+      });
+
+      if (!res.ok) {
+        alert("Errore aggiunta prodotto");
+        return;
+      }
+
+      document.getElementById("name").value = "";
+      document.getElementById("unit").value = "";
+      document.getElementById("quantity").value = "0";
+
+      await loadInventory();
+    }
+
+    async function adjustQty(id, delta) {
+      const res = await fetch(`/inventory/${id}/adjust`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ delta })
+      });
+
+      if (!res.ok) {
+        alert("Errore aggiornamento quantità");
+        return;
+      }
+
+      await loadInventory();
+    }
+
+    loadInventory();
+  </script>
+</body>
+</html>

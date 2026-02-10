@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <title>RISTOWORD – Cucina</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      margin: 20px;
+      background: #111;
+      color: #f5f5f5;
+    }
+    h1 { margin-bottom: 10px; }
+    label { display: inline-block; margin-right: 10px; }
+    select { padding: 4px; }
+    .orders-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 15px;
+    }
+    .order {
+      border-radius: 4px;
+      padding: 8px 10px;
+      min-width: 260px;
+      max-width: 320px;
+      box-shadow: 0 0 4px rgba(0,0,0,0.4);
+    }
+    .order-header { font-weight: bold; margin-bottom: 4px; }
+    .status-in_preparazione { background: #665400; }
+    .status-pronto { background: #145214; }
+    .status-servito { background: #333333; }
+    .meta { font-size: 12px; color: #e0e0e0; }
+    button { margin-top: 6px; padding: 4px 8px; cursor: pointer; }
+    .danger { background: #a00000; color: #fff; }
+    .refresh-info { font-size: 12px; color: #bbb; margin-top: 5px; }
+    .old-order { border: 2px solid #ff5555; }
+  </style>
+</head>
+<body>
+  <h1>RISTOWORD – Cucina</h1>
+
+  <div>
+    <label>
+      Reparto:
+      <select id="areaFilter" onchange="loadKitchenOrders()">
+        <option value="tutti">Sala + Pizzeria + Bar</option>
+        <option value="sala">Solo Sala</option>
+        <option value="pizzeria">Solo Pizzeria</option>
+        <option value="bar">Solo Bar</option>
+      </select>
+    </label>
+  </div>
+
+  <div class="refresh-info">
+    Aggiornamento automatico ogni 5 secondi.<br />
+    Vengono mostrati solo ordini <strong>IN PREPARAZIONE</strong> o <strong>PRONTI</strong>.
+  </div>
+
+  <div id="kitchenOrders" class="orders-container"></div>
+
+  <script>
+    async function loadKitchenOrders() {
+      try {
+        const res = await fetch("/orders");
+        if (!res.ok) {
+          console.error("Errore risposta /orders", res.status);
+          return;
+        }
+
+        const orders = await res.json();
+        const areaFilter = document.getElementById("areaFilter").value;
+
+        // Filtra per reparto e stato
+        let filtered = orders.filter(o =>
+          (areaFilter === "tutti" || o.area === areaFilter) &&
+          (o.status === "in_preparazione" || o.status === "pronto")
+        );
+
+        // Ordina per orario (più vecchi prima)
+        filtered.sort((a, b) => {
+          const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+          const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+          return ta - tb;
+        });
+
+        const container = document.getElementById("kitchenOrders");
+        container.innerHTML = "";
+
+        if (!filtered.length) {
+          container.innerHTML = "<em>Nessun ordine da mostrare</em>";
+          return;
+        }
+
+        const now = Date.now();
+
+        filtered.forEach(order => {
+          const div = document.createElement("div");
+          div.className = "order status-" + order.status;
+
+          // Evidenzia se l'ordine è vecchio (>15 minuti)
+          if (order.createdAt) {
+            const ageMinutes =
+              (now - new Date(order.createdAt).getTime()) / 60000;
+            if (ageMinutes >= 15) {
+              div.classList.add("old-order");
+            }
+          }
+
+          const createdAt = order.createdAt
+            ? new Date(order.createdAt).toLocaleTimeString()
+            : "";
+
+          div.innerHTML = `
+            <div class="order-header">
+              Tavolo ${order.table} – ${order.area.toUpperCase()}
+            </div>
+            <div>Coperti: ${order.covers}</div>
+            <div>Cameriere: ${order.waiter}</div>
+            <div>Stato: ${order.status}</div>
+            <div class="meta">
+              ${createdAt ? "Creato alle " + createdAt : ""}
+            </div>
+            <button onclick="updateStatus(${order.id}, 'pronto')">
+              Segna PRONTO
+            </button>
+            <button class="danger" onclick="updateStatus(${order.id}, 'servito')">
+              Segna SERVITO
+            </button>
+          `;
+
+          container.appendChild(div);
+        });
+
+      } catch (err) {
+        console.error("Errore caricamento ordini cucina:", err);
+      }
+    }
+
+    async function updateStatus(id, status) {
+      try {
+        const res = await fetch(`/orders/${id}/status`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status })
+        });
+
+        if (!res.ok) {
+          alert("Errore aggiornamento stato");
+          return;
+        }
+
+        await loadKitchenOrders();
+      } catch (err) {
+        console.error("Errore update status:", err);
+      }
+    }
+
+    // Primo caricamento e refresh automatico
+    loadKitchenOrders();
+    setInterval(loadKitchenOrders, 5000);
+  </script>
+</body>
+</html>

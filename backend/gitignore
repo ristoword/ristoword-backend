@@ -1,0 +1,9 @@
+node_modules/
+.env
+
+4. Salva il file
+5. Poi nel terminale:
+```bash
+git add .gitignore
+git commit -m "Add .gitignore"
+git push
